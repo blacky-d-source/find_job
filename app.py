@@ -17,14 +17,18 @@ SUPABASE_KEY = None
 # Tentative de chargement via Streamlit Secrets (Community Cloud)
 if "SUPABASE_URL" in st.secrets:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
-if "SUPABASE_KEY" in st.secrets:
+if "SUPABASE_SERVICE_ROLE_KEY" in st.secrets:
+    SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+elif "SERVICE_ROLE" in st.secrets:
+    SUPABASE_KEY = st.secrets["SERVICE_ROLE"]
+elif "SUPABASE_KEY" in st.secrets:
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 # Repli sur les variables d'environnement locales (.env)
 if not SUPABASE_URL:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
 if not SUPABASE_KEY:
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SERVICE_ROLE") or os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     st.error("Configuration Supabase manquante.")
