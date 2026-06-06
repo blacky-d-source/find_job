@@ -16,14 +16,17 @@ SUPABASE_URL = None
 SUPABASE_KEY = None
 
 # Tentative de chargement via Streamlit Secrets (Community Cloud)
-if "SUPABASE_URL" in st.secrets:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-if "SUPABASE_SERVICE_ROLE_KEY" in st.secrets:
-    SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
-elif "SERVICE_ROLE" in st.secrets:
-    SUPABASE_KEY = st.secrets["SERVICE_ROLE"]
-elif "SUPABASE_KEY" in st.secrets:
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+try:
+    if "SUPABASE_URL" in st.secrets:
+        SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    if "SUPABASE_SERVICE_ROLE_KEY" in st.secrets:
+        SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+    elif "SERVICE_ROLE" in st.secrets:
+        SUPABASE_KEY = st.secrets["SERVICE_ROLE"]
+    elif "SUPABASE_KEY" in st.secrets:
+        SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except Exception:
+    pass
 
 # Repli sur les variables d'environnement locales (.env)
 if not SUPABASE_URL:
@@ -38,7 +41,10 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-TABLE_NAME = "dataset_5000"
+# Default table name
+default_table = os.getenv("SUPABASE_TABLE") or "dataset_5000"
+if "table_name" not in st.session_state:
+    st.session_state.table_name = default_table
 
 st.set_page_config(page_title="Gestion des Appels Marketing", layout="wide")
 
@@ -46,9 +52,9 @@ st.set_page_config(page_title="Gestion des Appels Marketing", layout="wide")
 if "db_executor" not in st.session_state:
     st.session_state.db_executor = ThreadPoolExecutor(max_workers=1)
 
-def db_update(lead_id, phone_list):
+def db_update(lead_id, phone_list, table_name):
     try:
-        supabase.table(TABLE_NAME).update({"phone_whatsapp_valides": phone_list}).eq("id", lead_id).execute()
+        supabase.table(table_name).update({"phone_whatsapp_valides": phone_list}).eq("id", lead_id).execute()
     except Exception as e:
         print(f"Background DB Update Failed: {e}")
 
@@ -82,7 +88,7 @@ def on_wa_change(lead, phone, key):
     new_val = st.session_state[key]
     phone["has_whatsapp"] = new_val
     phone_list_copy = copy.deepcopy(lead["phone_whatsapp_valides"])
-    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy)
+    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy, st.session_state.table_name)
 
 def on_cont_change(lead, phone, key):
     new_val = st.session_state[key]
@@ -92,7 +98,7 @@ def on_cont_change(lead, phone, key):
     else:
         phone["last_contacted"] = None
     phone_list_copy = copy.deepcopy(lead["phone_whatsapp_valides"])
-    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy)
+    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy, st.session_state.table_name)
 
 def on_status_click(lead, phone):
     current_status = phone.get("call_status", "to call")
@@ -112,7 +118,7 @@ def on_status_click(lead, phone):
         phone["last_contacted"] = None
         
     phone_list_copy = copy.deepcopy(lead["phone_whatsapp_valides"])
-    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy)
+    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy, st.session_state.table_name)
 
 def on_job_click(lead, phone):
     current_val = phone.get("job_obtained", "en attente")
@@ -125,7 +131,7 @@ def on_job_click(lead, phone):
         
     phone["job_obtained"] = new_val
     phone_list_copy = copy.deepcopy(lead["phone_whatsapp_valides"])
-    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy)
+    st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy, st.session_state.table_name)
 
 # Inject custom CSS for modern monochrome theme
 st.markdown("""
@@ -265,14 +271,23 @@ st.markdown("""
 
 st.title("Dashboard d'Appels - Dataset RH")
 
+if st.session_state.get("leads_error"):
+    st.error(f"### Erreur de connexion à la table : {st.session_state.table_name}")
+    st.info(
+        "Veuillez vérifier le nom de la table saisi dans la barre latérale. "
+        "Les noms de tables PostgreSQL sont sensibles à la casse (généralement en minuscules).\n\n"
+        f"Détail technique : `{st.session_state.leads_error}`"
+    )
+    st.stop()
+
 # Récupération des données avec cache et pagination pour contourner la limite de 1000 lignes
 @st.cache_data(ttl=10)
-def get_data():
+def get_data(table_name):
     all_data = []
     limit = 1000
     offset = 0
     while True:
-        res = supabase.table(TABLE_NAME).select("id, company, phone_whatsapp_valides").range(offset, offset + limit - 1).execute()
+        res = supabase.table(table_name).select("id, company, phone_whatsapp_valides").range(offset, offset + limit - 1).execute()
         if not res.data:
             break
         all_data.extend(res.data)
@@ -282,8 +297,17 @@ def get_data():
     return all_data
 
 # Initialisation du session state
+if "leads_error" not in st.session_state:
+    st.session_state.leads_error = None
+
 if "leads" not in st.session_state:
-    st.session_state.leads = copy.deepcopy(get_data())
+    try:
+        st.session_state.leads = copy.deepcopy(get_data(st.session_state.table_name))
+        st.session_state.leads_error = None
+    except Exception as e:
+        st.session_state.leads = []
+        st.session_state.leads_error = str(e)
+
 if "whatsapp_template" not in st.session_state:
     st.session_state.whatsapp_template = get_whatsapp_template()
 if "quick_call_index" not in st.session_state:
@@ -302,10 +326,35 @@ st.sidebar.title("Filtres")
 
 if st.sidebar.button("Recharger les donnees"):
     st.cache_data.clear()
-    st.session_state.leads = copy.deepcopy(get_data())
+    try:
+        st.session_state.leads = copy.deepcopy(get_data(st.session_state.table_name))
+        st.session_state.leads_error = None
+    except Exception as e:
+        st.session_state.leads = []
+        st.session_state.leads_error = str(e)
     st.session_state.whatsapp_template = get_whatsapp_template()
     st.session_state.quick_call_index = 0
     st.rerun()
+
+# Configuration de la Table
+st.sidebar.markdown("---")
+st.sidebar.subheader("Configuration Table")
+
+def on_table_change():
+    st.cache_data.clear()
+    if "leads" in st.session_state:
+        del st.session_state["leads"]
+    if "leads_error" in st.session_state:
+        del st.session_state["leads_error"]
+    st.session_state.quick_call_index = 0
+
+table_input = st.sidebar.text_input(
+    "Table Supabase",
+    value=st.session_state.table_name,
+    key="table_input_key",
+    on_change=on_table_change
+)
+st.session_state.table_name = table_input
 
 # Champs de recherche
 search_company = st.sidebar.text_input("Rechercher une entreprise", value="")
