@@ -133,6 +133,11 @@ def on_job_click(lead, phone):
     phone_list_copy = copy.deepcopy(lead["phone_whatsapp_valides"])
     st.session_state.db_executor.submit(db_update, lead["id"], phone_list_copy, st.session_state.table_name)
 
+if "whatsapp_template" not in st.session_state:
+    st.session_state.whatsapp_template = get_whatsapp_template()
+if "quick_call_index" not in st.session_state:
+    st.session_state.quick_call_index = 0
+
 # Inject custom CSS for modern monochrome theme
 st.markdown("""
 <style>
@@ -271,48 +276,6 @@ st.markdown("""
 
 st.title("Dashboard d'Appels - Dataset RH")
 
-if st.session_state.get("leads_error"):
-    st.error(f"### Erreur de connexion à la table : {st.session_state.table_name}")
-    st.info(
-        "Veuillez vérifier le nom de la table saisi dans la barre latérale. "
-        "Les noms de tables PostgreSQL sont sensibles à la casse (généralement en minuscules).\n\n"
-        f"Détail technique : `{st.session_state.leads_error}`"
-    )
-    st.stop()
-
-# Récupération des données avec cache et pagination pour contourner la limite de 1000 lignes
-@st.cache_data(ttl=10)
-def get_data(table_name):
-    all_data = []
-    limit = 1000
-    offset = 0
-    while True:
-        res = supabase.table(table_name).select("id, company, phone_whatsapp_valides").range(offset, offset + limit - 1).execute()
-        if not res.data:
-            break
-        all_data.extend(res.data)
-        if len(res.data) < limit:
-            break
-        offset += limit
-    return all_data
-
-# Initialisation du session state
-if "leads_error" not in st.session_state:
-    st.session_state.leads_error = None
-
-if "leads" not in st.session_state:
-    try:
-        st.session_state.leads = copy.deepcopy(get_data(st.session_state.table_name))
-        st.session_state.leads_error = None
-    except Exception as e:
-        st.session_state.leads = []
-        st.session_state.leads_error = str(e)
-
-if "whatsapp_template" not in st.session_state:
-    st.session_state.whatsapp_template = get_whatsapp_template()
-if "quick_call_index" not in st.session_state:
-    st.session_state.quick_call_index = 0
-
 # Selector for View Mode
 view_mode = st.radio(
     "Mode d'affichage",
@@ -407,6 +370,43 @@ whatsapp_template = st.sidebar.text_area(
     key="whatsapp_template_input",
     on_change=on_template_change
 )
+
+# Récupération des données avec cache et pagination pour contourner la limite de 1000 lignes
+@st.cache_data(ttl=10)
+def get_data(table_name):
+    all_data = []
+    limit = 1000
+    offset = 0
+    while True:
+        res = supabase.table(table_name).select("id, company, website, phone_whatsapp_valides").range(offset, offset + limit - 1).execute()
+        if not res.data:
+            break
+        all_data.extend(res.data)
+        if len(res.data) < limit:
+            break
+        offset += limit
+    return all_data
+
+# Initialisation du session state pour les leads
+if "leads_error" not in st.session_state:
+    st.session_state.leads_error = None
+
+if "leads" not in st.session_state:
+    try:
+        st.session_state.leads = copy.deepcopy(get_data(st.session_state.table_name))
+        st.session_state.leads_error = None
+    except Exception as e:
+        st.session_state.leads = []
+        st.session_state.leads_error = str(e)
+
+if st.session_state.get("leads_error"):
+    st.error(f"### Erreur de connexion à la table : {st.session_state.table_name}")
+    st.info(
+        "Veuillez vérifier le nom de la table saisi dans la barre latérale. "
+        "Les noms de tables PostgreSQL sont sensibles à la casse (généralement en minuscules).\n\n"
+        f"Détail technique : `{st.session_state.leads_error}`"
+    )
+    st.stop()
 
 # Parseur de date robuste
 def parse_date(date_str):
@@ -604,6 +604,11 @@ if view_mode == "Liste complete":
         matching_phones = lead["_matching_phones"]
         
         with st.expander(f"{lead['company'] or 'Entreprise Inconnue'} (ID: {lead['id']})"):
+            website_url = lead.get("website")
+            if website_url:
+                clean_url = website_url if website_url.startswith(("http://", "https://")) else f"https://{website_url}"
+                st.markdown(f'<a href="{clean_url}" target="_blank" class="custom-btn" style="width: auto; display: inline-block; margin-bottom: 16px;">Site Web</a>', unsafe_allow_html=True)
+                
             for phone in matching_phones:
                 orig_index = lead["phone_whatsapp_valides"].index(phone)
                 
@@ -701,11 +706,18 @@ else:
         st.markdown("---")
         st.markdown(f"**Lead {idx + 1} sur {len(filtered_leads)}**")
         
+        website_url = lead.get("website")
+        website_html = ""
+        if website_url:
+            clean_url = website_url if website_url.startswith(("http://", "https://")) else f"https://{website_url}"
+            website_html = f'<a href="{clean_url}" target="_blank" class="custom-btn" style="width: auto; display: inline-block; margin-top: 12px; text-decoration: none;">Site Web</a>'
+            
         # Company Card layout
         st.markdown(f"""
         <div style="padding: 24px; border: 1px solid #E5E5E5; border-radius: 4px; background-color: #F9F9F9; margin-bottom: 24px;">
             <h4 style="margin: 0 0 8px 0; font-family: 'Geist', sans-serif; font-weight: 600; color: #000000;">{lead.get('company') or 'Entreprise Inconnue'}</h4>
-            <p style="margin: 0; color: #444444; font-size: 14px;">ID: {lead['id']}</p>
+            <p style="margin: 0; color: #444444; font-size: 14px; margin-bottom: 0;">ID: {lead['id']}</p>
+            {website_html}
         </div>
         """, unsafe_allow_html=True)
         
