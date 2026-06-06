@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Load environment variables
 load_dotenv()
+load_dotenv("../.env")
 
 # Connexion à Supabase
 SUPABASE_URL = None
@@ -50,6 +51,31 @@ def db_update(lead_id, phone_list):
         supabase.table(TABLE_NAME).update({"phone_whatsapp_valides": phone_list}).eq("id", lead_id).execute()
     except Exception as e:
         print(f"Background DB Update Failed: {e}")
+
+def db_update_template(content_val):
+    try:
+        res = supabase.table("messages_templates").select("id").limit(1).execute()
+        if res.data:
+            row_id = res.data[0]["id"]
+            supabase.table("messages_templates").update({"content": content_val}).eq("id", row_id).execute()
+        else:
+            supabase.table("messages_templates").insert({"content": content_val}).execute()
+    except Exception as e:
+        print(f"Background Template Update Failed: {e}")
+
+def get_whatsapp_template():
+    try:
+        res = supabase.table("messages_templates").select("content").limit(1).execute()
+        if res.data and res.data[0].get("content"):
+            return res.data[0]["content"]
+    except Exception as e:
+        print(f"Failed to fetch template from DB: {e}")
+    return "Bonjour, je vous contacte au nom de [Nom_Entreprise] suite à votre intérêt pour nos services."
+
+def on_template_change():
+    new_template = st.session_state.whatsapp_template_input
+    st.session_state.whatsapp_template = new_template
+    st.session_state.db_executor.submit(db_update_template, new_template)
 
 # Callbacks pour mise à jour en temps réel (exécutés en arrière-plan sans bloquer l'UI)
 def on_wa_change(lead, phone, key):
@@ -258,6 +284,8 @@ def get_data():
 # Initialisation du session state
 if "leads" not in st.session_state:
     st.session_state.leads = copy.deepcopy(get_data())
+if "whatsapp_template" not in st.session_state:
+    st.session_state.whatsapp_template = get_whatsapp_template()
 if "quick_call_index" not in st.session_state:
     st.session_state.quick_call_index = 0
 
@@ -275,6 +303,7 @@ st.sidebar.title("Filtres")
 if st.sidebar.button("Recharger les donnees"):
     st.cache_data.clear()
     st.session_state.leads = copy.deepcopy(get_data())
+    st.session_state.whatsapp_template = get_whatsapp_template()
     st.session_state.quick_call_index = 0
     st.rerun()
 
@@ -325,7 +354,9 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Configuration WhatsApp")
 whatsapp_template = st.sidebar.text_area(
     "Modèle de message",
-    value="Bonjour, je vous contacte au nom de [Nom_Entreprise] suite à votre intérêt pour nos services."
+    value=st.session_state.whatsapp_template,
+    key="whatsapp_template_input",
+    on_change=on_template_change
 )
 
 # Parseur de date robuste
