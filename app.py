@@ -372,7 +372,7 @@ whatsapp_template = st.sidebar.text_area(
 )
 
 # Récupération des données avec cache et pagination pour contourner la limite de 1000 lignes
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=3600)
 def get_data(table_name):
     all_data = []
     limit = 1000
@@ -579,7 +579,7 @@ if view_mode == "Liste complete":
             st.bar_chart(df_job)
 
     # Pagination
-    items_per_page = 20
+    items_per_page = 10
     total_items = len(filtered_leads)
     total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
     
