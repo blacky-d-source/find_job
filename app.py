@@ -608,10 +608,10 @@ if view_mode == "Liste complete":
                         st.text("Non contacté")
                 
                 with col5:
-                    st.markdown(f'<a href="{tel_url}" target="_self" style="text-decoration: none;"><div class="custom-btn">Appeler</div></a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{tel_url}" target="_self" class="custom-btn">Appeler</a>', unsafe_allow_html=True)
                     
                 with col6:
-                    st.markdown(f'<a href="{wa_url}" target="_blank" style="text-decoration: none;"><div class="custom-btn">Message</div></a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{wa_url}" target="_blank" class="custom-btn">Message</a>', unsafe_allow_html=True)
                     
                 with col7:
                     current_status = phone.get("call_status", "to call")
@@ -714,10 +714,10 @@ else:
                     st.text("Non contacté")
                     
             with col5:
-                st.markdown(f'<a href="{tel_url}" target="_self" style="text-decoration: none;"><div class="custom-btn">Appeler</div></a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="{tel_url}" target="_self" class="custom-btn">Appeler</a>', unsafe_allow_html=True)
                 
             with col6:
-                st.markdown(f'<a href="{wa_url}" target="_blank" style="text-decoration: none;"><div class="custom-btn">Message</div></a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="{wa_url}" target="_blank" class="custom-btn">Message</a>', unsafe_allow_html=True)
                 
             with col7:
                 current_status = phone.get("call_status", "to call")
