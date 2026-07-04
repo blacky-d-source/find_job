@@ -51,6 +51,18 @@ def set_query_param(name, value):
         except Exception:
             pass
 
+def sync_params_and_rerun():
+    # Helper to sync current session state to query parameters before rerunning
+    if "db_choice" in st.session_state:
+        set_query_param("db_choice", st.session_state.db_choice)
+    if "navigation_page_choice" in st.session_state:
+        set_query_param("page_choice", st.session_state.navigation_page_choice)
+    if "quick_call_index" in st.session_state:
+        set_query_param("quick_call_index", st.session_state.quick_call_index)
+    if "view_mode" in st.session_state:
+        set_query_param("view_mode", st.session_state.view_mode)
+    st.rerun()
+
 # Initialize session state variables from URL parameters to persist mobile sessions
 init_db_choice = get_query_param("db_choice", "autom_scrap_mess")
 init_page_choice = get_query_param("page_choice", "")
@@ -254,7 +266,14 @@ else:
 # Respect manual override if the widget key exists and page/project hasn't just changed
 if "table_input_key" in st.session_state and st.session_state.table_input_key:
     if "last_db_choice" in st.session_state and st.session_state.last_db_choice == db_choice:
-        active_table = st.session_state.table_input_key
+        val = st.session_state.table_input_key.strip()
+        # Validate override based on db_choice to prevent cross-db table loading errors
+        if db_choice == "findjob" and val in ["companies", "company_phones", "company_emails", "job_opportunities", "messages_templates"]:
+            active_table = val
+        elif db_choice == "autom_scrap_mess" and (val.lower().startswith(("dataset", "leads")) or val == "messages_templates"):
+            active_table = val
+        elif db_choice == "Personnalise":
+            active_table = val
 
 # Detect table name switch to clear cached data
 if "last_table_name" not in st.session_state:
@@ -593,7 +612,7 @@ if st.sidebar.button("Recharger les donnees"):
         if "templates" in st.session_state:
             del st.session_state.templates
     st.session_state.quick_call_index = 0
-    st.rerun()
+    sync_params_and_rerun()
 
 # Configuration de la Table (Manual Override)
 st.sidebar.markdown("---")
@@ -1170,7 +1189,7 @@ if page_choice == "Appels (Entreprises et Telephones)" or page_choice.lower().st
             with nav_col1:
                 if st.button("Precedent", disabled=(idx == 0), key="prev_lead_btn"):
                     st.session_state.quick_call_index -= 1
-                    st.rerun()
+                    sync_params_and_rerun()
                     
             with nav_col2:
                 st.write("")
@@ -1181,7 +1200,7 @@ if page_choice == "Appels (Entreprises et Telephones)" or page_choice.lower().st
                 if st.button(next_label, key="next_lead_btn"):
                     if not is_last:
                         st.session_state.quick_call_index += 1
-                        st.rerun()
+                        sync_params_and_rerun()
                     else:
                         st.success("Tous les leads filtres ont ete traites !")
 
@@ -1435,7 +1454,7 @@ elif page_choice == "Modeles de Messages":
                 supabase.table("messages_templates").insert({"content": new_template_text.strip()}).execute()
                 st.success("Modele ajoute avec succes !")
                 load_page_data(force=True)
-                st.rerun()
+                sync_params_and_rerun()
             except Exception as e:
                 st.error(f"Erreur lors de l'ajout : {e}")
         else:
@@ -1454,14 +1473,14 @@ elif page_choice == "Modeles de Messages":
                     if st.button("Utiliser", key=f"use_temp_{t.get('id')}_{idx}"):
                         st.session_state.whatsapp_template = t.get("content")
                         st.success("Ce modele est maintenant utilise pour le bouton WhatsApp !")
-                        st.rerun()
+                        sync_params_and_rerun()
                 with col2:
                     if st.button("Supprimer", key=f"del_temp_{t.get('id')}_{idx}"):
                         try:
                             supabase.table("messages_templates").delete().eq("id", t.get("id")).execute()
                             st.success("Modele supprime avec succes !")
                             load_page_data(force=True)
-                            st.rerun()
+                            sync_params_and_rerun()
                         except Exception as e:
                             st.error(f"Erreur lors de la suppression : {e}")
 
