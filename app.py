@@ -7,9 +7,20 @@ from datetime import datetime, timezone
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
-# Load environment variables
+# Load environment variables (local .env only — Streamlit Cloud uses st.secrets)
 load_dotenv()
-load_dotenv("../.env")
+
+def get_secret(key, default=None):
+    """Retrieve a secret from os.environ first, then st.secrets as fallback."""
+    val = os.getenv(key)
+    if val:
+        return val
+    try:
+        if hasattr(st, "secrets") and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return default
 
 st.set_page_config(page_title="Gestion des Appels et Leads", layout="wide")
 
@@ -125,21 +136,21 @@ SUPABASE_URL = None
 SUPABASE_KEY = None
 
 if db_choice == "autom_scrap_mess":
-    SUPABASE_URL = os.getenv("SUPABASE_URL_AUTOM_SCRAP_MESS") or os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_URL_FINDJOB")
-    SUPABASE_KEY = (os.getenv("SUPABASE_KEY_AUTOM_SCRAP_MESS") or 
-                    os.getenv("SERVICE_ROLE_AUTOM_SCRAP_MESS") or 
-                    os.getenv("SUPABASE_SERVICE_ROLE_KEY") or 
-                    os.getenv("SERVICE_ROLE") or 
-                    os.getenv("SUPABASE_KEY") or
-                    os.getenv("SUPABASE_KEY_FINDJOB") or
-                    os.getenv("SERVICE_ROLE_FINDJOB"))
+    SUPABASE_URL = get_secret("SUPABASE_URL_AUTOM_SCRAP_MESS") or get_secret("SUPABASE_URL") or get_secret("SUPABASE_URL_FINDJOB")
+    SUPABASE_KEY = (get_secret("SUPABASE_KEY_AUTOM_SCRAP_MESS") or 
+                    get_secret("SERVICE_ROLE_AUTOM_SCRAP_MESS") or 
+                    get_secret("SUPABASE_SERVICE_ROLE_KEY") or 
+                    get_secret("SERVICE_ROLE") or 
+                    get_secret("SUPABASE_KEY") or
+                    get_secret("SUPABASE_KEY_FINDJOB") or
+                    get_secret("SERVICE_ROLE_FINDJOB"))
 elif db_choice == "findjob":
-    SUPABASE_URL = os.getenv("SUPABASE_URL_FINDJOB") or os.getenv("SUPABASE_URL")
-    SUPABASE_KEY = (os.getenv("SUPABASE_KEY_FINDJOB") or 
-                    os.getenv("SERVICE_ROLE_FINDJOB") or
-                    os.getenv("SUPABASE_SERVICE_ROLE_KEY") or 
-                    os.getenv("SERVICE_ROLE") or 
-                    os.getenv("SUPABASE_KEY"))
+    SUPABASE_URL = get_secret("SUPABASE_URL_FINDJOB") or get_secret("SUPABASE_URL")
+    SUPABASE_KEY = (get_secret("SUPABASE_KEY_FINDJOB") or 
+                    get_secret("SERVICE_ROLE_FINDJOB") or
+                    get_secret("SUPABASE_SERVICE_ROLE_KEY") or 
+                    get_secret("SERVICE_ROLE") or 
+                    get_secret("SUPABASE_KEY"))
 else: # Personnalise
     if "custom_url" not in st.session_state:
         st.session_state.custom_url = ""
